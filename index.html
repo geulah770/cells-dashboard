@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>שכירות תאים</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&family=Heebo:wght@400;500;700&display=swap">
+<style>
+/* Layout: right-to-left. Aside (needs attention, free cells) sits left of the two cabinets on wide screens and above them on phones; full ledger underneath. */
+:root{
+  --font-display:'Frank Ruhl Libre','David Libre',Georgia,serif;
+  --font-body:'Heebo','Arial Hebrew',Arial,sans-serif;
+  --bg:#EDF0EE; --panel:#F9FBFA; --ink:#1B2B2D; --muted:#586869; --line:#D2DAD6;
+  --wood:#7C5A3D; --wood-in:#4A3626; --brass:#B08A32; --brass-ink:#2A1F08;
+  --good:#2B7A4B; --good-bg:#D9EEE1;
+  --warn:#8F5A00; --warn-bg:#F5E6C4;
+  --bad:#B0322A; --bad-bg:#F6D8D4;
+  --free:#2F6A8C; --free-bg:#D9E8F1;
+  --idle:#5F6F70; --idle-bg:#E3E8E6;
+  --overlay:rgba(14,22,23,.55);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111819; --panel:#192223; --ink:#E4EDEB; --muted:#93A4A3; --line:#2B3839;
+    --wood:#8E6C4A; --wood-in:#2B2017; --brass:#D2AC52; --brass-ink:#241A06;
+    --good:#6CCB92; --good-bg:#17382A;
+    --warn:#E3B05A; --warn-bg:#3A2D12;
+    --bad:#F08A80; --bad-bg:#3E1D1A;
+    --free:#7FB8DB; --free-bg:#17303F;
+    --idle:#9DAFB0; --idle-bg:#222D2E;
+    --overlay:rgba(0,0,0,.65);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111819; --panel:#192223; --ink:#E4EDEB; --muted:#93A4A3; --line:#2B3839;
+  --wood:#8E6C4A; --wood-in:#2B2017; --brass:#D2AC52; --brass-ink:#241A06;
+  --good:#6CCB92; --good-bg:#17382A;
+  --warn:#E3B05A; --warn-bg:#3A2D12;
+  --bad:#F08A80; --bad-bg:#3E1D1A;
+  --free:#7FB8DB; --free-bg:#17303F;
+  --idle:#9DAFB0; --idle-bg:#222D2E;
+  --overlay:rgba(0,0,0,.65);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink); direction:rtl;
+  font-family:var(--font-body); font-size:15px; line-height:1.5;
+  padding-block:22px 40px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+.app{max-width:1240px;margin-inline:auto;display:flex;flex-direction:column;gap:22px}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 24px}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(30px,6vw,44px);line-height:1.05;margin:0;text-wrap:balance}
+.dateline{color:var(--muted);font-size:14px;display:flex;flex-wrap:wrap;gap:4px 14px}
+.dateline b{color:var(--ink);font-weight:700}
+
+/* toolbar */
+.bar{display:flex;flex-direction:column;gap:12px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:10px}
+.tile{
+  text-align:start;background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0
+}
+.tile .n{font-family:var(--font-display);font-weight:700;font-size:30px;line-height:1;font-variant-numeric:tabular-nums}
+.tile .l{font-size:13px;color:var(--muted)}
+.tile[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.tile[data-filter="free"] .n{color:var(--free)}
+.tile[data-filter="overdue"] .n{color:var(--bad)}
+.tile[data-filter="due"] .n{color:var(--warn)}
+.tile[data-filter="soon"] .n{color:var(--warn)}
+.tile[data-filter="paid"] .n{color:var(--good)}
+.tile[data-filter="unknown"] .n{color:var(--idle)}
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.search{flex:1 1 220px;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:9px 12px}
+.soonctl{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:14px}
+.soonctl select{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.reset{background:none;border:none;color:var(--free);text-decoration:underline;padding:4px}
+
+/* main grid */
+.main{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);grid-template-areas:"cabs aside";gap:24px;align-items:start}
+.aside{grid-area:aside;display:flex;flex-direction:column;gap:18px;min-width:0}
+.cabs{grid-area:cabs;min-width:0}
+@media (max-width:920px){
+  .main{grid-template-columns:minmax(0,1fr);grid-template-areas:"aside" "cabs"}
+}
+h2{font-family:var(--font-display);font-weight:700;font-size:22px;margin:0 0 10px;line-height:1.2}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 14px 10px}
+.panel h2{font-size:19px}
+ul.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+ul.list li{border-top:1px solid var(--line)}
+ul.list li:first-child{border-top:none}
+.row{
+  width:100%;background:none;border:none;text-align:start;padding:9px 2px;
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center
+}
+.row:hover .who{text-decoration:underline}
+.who{font-weight:700;min-width:0;overflow-wrap:anywhere}
+.where{grid-column:1;color:var(--muted);font-size:13px}
+.row .chip{grid-column:2;grid-row:1 / span 2;justify-self:end}
+.empty-note{color:var(--muted);font-size:14px;padding:6px 2px 10px;margin:0}
+.freegrid{display:flex;flex-wrap:wrap;gap:8px;padding-bottom:6px}
+.freebtn{
+  background:var(--free-bg);color:var(--free);border:1px solid transparent;border-radius:4px;
+  padding:6px 10px;font-weight:500;font-size:14px;display:flex;flex-direction:column;align-items:flex-start;gap:0
+}
+.freebtn small{font-size:11.5px;opacity:.85;font-weight:400}
+
+/* chips */
+.chip{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12.5px;font-weight:700;white-space:nowrap}
+.s-paid .chip,.chip.s-paid{background:var(--good-bg);color:var(--good)}
+.chip.s-soon,.chip.s-due{background:var(--warn-bg);color:var(--warn)}
+.chip.s-overdue{background:var(--bad-bg);color:var(--bad)}
+.chip.s-free{background:var(--free-bg);color:var(--free)}
+.chip.s-unknown,.chip.s-verify,.chip.s-org{background:var(--idle-bg);color:var(--idle)}
+
+/* cabinets */
+.cabrow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+@media (max-width:1100px){.cabrow{grid-template-columns:minmax(0,1fr)}}
+.cab h2{display:flex;align-items:baseline;gap:8px}
+.cab-frame{background:var(--wood-in);border:9px solid var(--wood);border-radius:4px;padding:6px}
+.cab-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.cell{
+  position:relative;min-height:98px;border:none;border-radius:2px;padding:8px 8px 7px;
+  display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:6px;text-align:start;min-width:0;
+  background:var(--idle-bg);color:var(--ink);transition:transform .12s ease,opacity .12s ease
+}
+.cell:hover{transform:translateY(-2px)}
+.cell.dim{opacity:.25}
+.cell.s-paid{background:var(--good-bg)}
+.cell.s-soon,.cell.s-due{background:var(--warn-bg)}
+.cell.s-overdue{background:var(--bad-bg)}
+.cell.s-free{background:var(--free-bg)}
+.cell .num{background:var(--brass);color:var(--brass-ink);font-size:11px;font-weight:700;padding:0 6px;border-radius:2px;line-height:1.6}
+.cell .nm{font-family:var(--font-display);font-weight:700;font-size:15.5px;line-height:1.15;overflow-wrap:anywhere}
+.cell.s-free .nm{color:var(--free);font-weight:500}
+.cell .stx{font-size:12px;font-weight:700;line-height:1.25}
+.cell .nx{font-size:11.5px;color:var(--muted);line-height:1.2;font-weight:400}
+.cell.s-paid .stx{color:var(--good)}
+.cell.s-soon .stx,.cell.s-due .stx{color:var(--warn)}
+.cell.s-overdue .stx{color:var(--bad)}
+.cell.s-free .stx{color:var(--free)}
+.cell.s-unknown .stx,.cell.s-verify .stx,.cell.s-org .stx{color:var(--idle)}
+@media (max-width:520px){
+  .cell{min-height:88px;padding:6px}
+  .cell .nm{font-size:14px}
+  .cab-frame{border-width:7px}
+}
+.hint{color:var(--muted);font-size:13px;margin:10px 0 0}
+.visually{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ledger */
+.ledger h2{margin-bottom:8px}
+.tablewrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:6px}
+table{width:100%;border-collapse:collapse;min-width:620px}
+th{font-size:12.5px;font-weight:700;color:var(--muted);text-align:start;padding:10px 12px;border-bottom:1px solid var(--line);letter-spacing:.02em;white-space:nowrap}
+td{padding:9px 12px;border-top:1px solid var(--line);vertical-align:middle}
+tbody tr:first-child td{border-top:none}
+td.t-who{font-weight:700}
+td.t-where,td.t-date{white-space:nowrap;font-variant-numeric:tabular-nums}
+td small{display:block;color:var(--muted);font-weight:400;font-size:12.5px}
+.link{background:none;border:none;color:var(--free);text-decoration:underline;padding:2px 4px;white-space:nowrap}
+.foot{color:var(--muted);font-size:13px;margin:10px 0 0}
+
+/* states */
+.state{background:var(--panel);border:1px dashed var(--line);border-radius:6px;padding:26px 18px;color:var(--muted)}
+.state b{display:block;color:var(--ink);font-family:var(--font-display);font-size:20px;margin-bottom:4px}
+
+/* anchors and sheet link */
+a.cell,a.row{color:var(--ink);text-decoration:none}
+a.freebtn{text-decoration:none}
+.sheetlink{background:var(--ink);color:var(--bg);border-radius:6px;padding:8px 14px;font-weight:700;text-decoration:none;white-space:nowrap}
+.btn-grant{background:var(--ink);color:var(--bg);border:none;border-radius:6px;padding:9px 16px;font-weight:700}
+/* editor and login */
+.ov{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:flex-end;justify-content:center;z-index:20;
+  padding-top:env(safe-area-inset-top,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+@media (min-width:640px){.ov{align-items:center}}
+.ed{
+  background:var(--panel);width:min(520px,100%);max-height:100%;overflow-y:auto;border-radius:10px 10px 0 0;
+  padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px
+}
+@media (min-width:640px){.ed{border-radius:10px}}
+.ed h3{font-family:var(--font-display);font-size:24px;margin:0;line-height:1.1}
+.ed .src{color:var(--muted);font-size:13px;margin:0}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld label{font-size:13px;color:var(--muted);font-weight:500}
+.fld input,.fld select{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:0;width:100%}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.three{display:grid;grid-template-columns:1.3fr 1fr;gap:10px}
+.yh{font-size:12.5px;color:var(--muted)}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.btn{border-radius:6px;padding:9px 16px;border:1px solid var(--line);background:var(--bg);font-weight:500}
+.btn.main-btn{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:700}
+.btn.good{background:var(--good-bg);color:var(--good);border-color:transparent;font-weight:700}
+.btn:disabled{opacity:.5;cursor:default}
+.msg{color:var(--bad);font-size:14px;min-height:1.2em;margin:0}
+.btn-grant{background:var(--ink);color:var(--bg);border:none;border-radius:6px;padding:9px 16px;font-weight:700}
+.sheetlink{background:var(--ink);color:var(--bg);border-radius:6px;padding:8px 14px;font-weight:700;text-decoration:none;white-space:nowrap}
+.pwform{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.pwform input{flex:1 1 160px;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:9px 12px}
+@media (prefers-reduced-motion: reduce){.cell{transition:none}.cell:hover{transform:none}}
+</style>
+</head>
+<body>
+
+
+<div class="app" lang="he" dir="rtl">
+  <header class="top">
+    <h1>שכירות תאים</h1>
+    <div class="dateline" id="dateline"></div>
+    <a class="sheetlink" id="sheetlink" href="#" target="_blank" rel="noopener">פתיחת הגיליון</a>
+  </header>
+
+  <section class="bar" aria-label="סינון">
+    <div class="tiles" id="tiles">
+      <button class="tile" data-filter="free" aria-pressed="false"><span class="n" id="n-free">–</span><span class="l">פנויים</span></button>
+      <button class="tile" data-filter="overdue" aria-pressed="false"><span class="n" id="n-overdue">–</span><span class="l">באיחור</span></button>
+      <button class="tile" data-filter="due" aria-pressed="false"><span class="n" id="n-due">–</span><span class="l">לתשלום החודש</span></button>
+      <button class="tile" data-filter="soon" aria-pressed="false"><span class="n" id="n-soon">–</span><span class="l">בקרוב</span></button>
+      <button class="tile" data-filter="paid" aria-pressed="false"><span class="n" id="n-paid">–</span><span class="l">שולם</span></button>
+      <button class="tile" data-filter="unknown" aria-pressed="false"><span class="n" id="n-unknown">–</span><span class="l">ללא תאריך תשלום</span></button>
+    </div>
+    <div class="controls">
+      <input class="search" id="q" type="search" placeholder="חיפוש לפי שם, תא או הערה" autocomplete="off">
+      <div class="soonctl">
+        <label for="soonN">״בקרוב״ הוא עד</label>
+        <select id="soonN">
+          <option value="1">חודש</option>
+          <option value="2">חודשיים</option>
+          <option value="3" selected>3 חודשים</option>
+          <option value="6">6 חודשים</option>
+          <option value="12">12 חודשים</option>
+        </select>
+      </div>
+      <button class="reset" id="reset" hidden>הצג הכל</button>
+    </div>
+  </section>
+
+  <div class="main">
+    <aside class="aside">
+      <section class="panel" aria-labelledby="h-att">
+        <h2 id="h-att">דורש טיפול</h2>
+        <div id="attention"></div>
+      </section>
+      <section class="panel" aria-labelledby="h-free">
+        <h2 id="h-free">פנויים עכשיו</h2>
+        <div id="freelist"></div>
+      </section>
+    </aside>
+    <section class="cabs" aria-labelledby="h-cabs">
+      <h2 id="h-cabs" class="visually">הארונות</h2>
+      <div id="cabs"></div>
+    </section>
+  </div>
+
+  <section class="ledger" aria-labelledby="h-led">
+    <h2 id="h-led">כל השוכרים והתשלומים</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>תא</th><th>שוכר</th><th>תשלום אחרון</th><th>לתשלום הבא</th><th>מצב</th><th></th></tr></thead>
+        <tbody id="ledger"></tbody>
+      </table>
+    </div>
+    <p class="foot">שינויים בדשבורד נשמרים בגיליון, והדף מתרענן כל דקה. תשלום נחשב כתקופה של 12 חודשים, אלא אם צוין אחרת בשורה. תאריכים לפי הלוח העברי.</p>
+  </section>
+</div>
+
+
+<div class="ov" id="ov" hidden>
+  <form class="ed" id="ed" autocomplete="off">
+    <h3 id="ed-title">תא</h3>
+    <p class="src" id="ed-src"></p>
+    <div class="two">
+      <div class="fld"><label for="ed-kind">סוג</label>
+        <select id="ed-kind">
+          <option value="person">שוכר</option>
+          <option value="org">מוסד / שימוש פנימי</option>
+          <option value="verify">לברר</option>
+          <option value="free">פנוי</option>
+        </select></div>
+      <div class="fld"><label for="ed-tenant">שם</label><input id="ed-tenant" type="text"></div>
+    </div>
+    <div class="fld"><label for="ed-note">הערה</label><input id="ed-note" type="text"></div>
+    <div class="three">
+      <div class="fld"><label for="ed-month">חודש התשלום</label><select id="ed-month"></select></div>
+      <div class="fld"><label for="ed-year">שנה</label><input id="ed-year" type="number" min="5700" max="5900" step="1" inputmode="numeric"><span class="yh" id="ed-yh"></span></div>
+    </div>
+    <div class="two">
+      <div class="fld"><label for="ed-type">סוג הרישום</label>
+        <select id="ed-type">
+          <option value="paid">שולם בחודש הזה</option>
+          <option value="until">שולם עד סוף החודש</option>
+        </select></div>
+      <div class="fld"><label for="ed-period">תשלום מכסה</label>
+        <select id="ed-period">
+          <option value="3">3 חודשים</option>
+          <option value="6">6 חודשים</option>
+          <option value="12">12 חודשים</option>
+          <option value="24">24 חודשים</option>
+        </select></div>
+    </div>
+    <p class="msg" id="ed-msg" role="status"></p>
+    <div class="btns">
+      <button type="submit" class="btn main-btn" id="ed-save">שמירה בגיליון</button>
+      <button type="button" class="btn good" id="ed-paynow">שולם החודש</button>
+      <button type="button" class="btn" id="ed-free">סימון כפנוי</button>
+      <button type="button" class="btn" id="ed-cancel">ביטול</button>
+    </div>
+    <a class="link" id="ed-sheet" href="#" target="_blank" rel="noopener">פתיחת השורה בגיליון</a>
+  </form>
+</div>
+
+<script>
+/*LOGIC-START*/
+const MONTHS=[['tishrei','תשרי'],['cheshvan','חשוון'],['kislev','כסלו'],['tevet','טבת'],['shevat','שבט'],['adar','אדר'],['adar1','אדר א׳'],['adar2','אדר ב׳'],['nisan','ניסן'],['iyar','אייר'],['sivan','סיוון'],['tamuz','תמוז'],['av','אב'],['elul','אלול']];
+const EPOCH=5600;
+function lab(k){const m=MONTHS.find(x=>x[0]===k);return m?m[1]:'';}
+function isLeap(y){return [0,3,6,8,11,14,17].indexOf(y%19)>=0;}
+function mlen(y){return isLeap(y)?13:12;}
+function order(y){
+  return isLeap(y)
+    ?['tishrei','cheshvan','kislev','tevet','shevat','adar1','adar2','nisan','iyar','sivan','tamuz','av','elul']
+    :['tishrei','cheshvan','kislev','tevet','shevat','adar','nisan','iyar','sivan','tamuz','av','elul'];
+}
+function pos(y,k){
+  if(k==='adar'&&isLeap(y))k='adar2';
+  if((k==='adar1'||k==='adar2')&&!isLeap(y))k='adar';
+  return order(y).indexOf(k)+1;
+}
+function ord(y,k){let s=0;for(let i=EPOCH;i<y;i++)s+=mlen(i);return s+pos(y,k);}
+function fromOrd(o){let y=EPOCH;while(o>mlen(y)){o-=mlen(y);y++;}return {y:y,k:order(y)[o-1]};}
+function hebNum(n){
+  const L=[[400,'ת'],[300,'ש'],[200,'ר'],[100,'ק'],[90,'צ'],[80,'פ'],[70,'ע'],[60,'ס'],[50,'נ'],[40,'מ'],[30,'ל'],[20,'כ'],[10,'י'],[9,'ט'],[8,'ח'],[7,'ז'],[6,'ו'],[5,'ה'],[4,'ד'],[3,'ג'],[2,'ב'],[1,'א']];
+  let s='';n=n%1000;
+  for(const [v,c] of L){
+    while(n>=v){
+      if(n===15){s+='טו';n=0;break;}
+      if(n===16){s+='טז';n=0;break;}
+      s+=c;n-=v;
+    }
+  }
+  return s.length>1?s.slice(0,-1)+'״'+s.slice(-1):s+'׳';
+}
+function nowHeb(date){
+  date=date||new Date();
+  try{
+    const f=new Intl.DateTimeFormat('en-u-ca-hebrew-nu-latn',{day:'numeric',month:'long',year:'numeric',timeZone:'Asia/Jerusalem'});
+    const p={};f.formatToParts(date).forEach(x=>{p[x.type]=x.value;});
+    const y=parseInt(p.year,10),d=parseInt(p.day,10);
+    const name=String(p.month||'').toLowerCase().replace(/[^a-z ]/g,'').trim();
+    const map={'tishri':'tishrei','tishrei':'tishrei','heshvan':'cheshvan','cheshvan':'cheshvan','kislev':'kislev','tevet':'tevet','shevat':'shevat','adar i':'adar1','adar ii':'adar2','adar':'adar','nisan':'nisan','iyar':'iyar','sivan':'sivan','tamuz':'tamuz','av':'av','elul':'elul'};
+    const k=map[name];
+    if(y>5000&&k)return {y:y,k:k,d:d,o:ord(y,k)};
+  }catch(e){}
+  const o=ord(5787,'cheshvan')+Math.round((date-new Date('2026-11-01T12:00:00Z'))/(29.530588*864e5));
+  const r=fromOrd(o);return {y:r.y,k:r.k,d:null,o:o};
+}
+function dueOrd(c){
+  if(c.payYear==null||!c.payMonth)return null;
+  const o=ord(c.payYear,c.payMonth);
+  if(c.payType==='until')return o+1;
+  const per=c.period||12;
+  if(per%12===0)return ord(c.payYear+per/12,c.payMonth);
+  return o+per;
+}
+function statusOf(c,nowO,soonN){
+  if(c.kind==='free')return {st:'free',diff:null,dueO:null};
+  if(c.kind==='verify')return {st:'verify',diff:null,dueO:null};
+  if(c.kind==='org')return {st:'org',diff:null,dueO:null};
+  const dueO=dueOrd(c);
+  if(dueO==null)return {st:'unknown',diff:null,dueO:null};
+  const diff=dueO-nowO;
+  return {st:diff<0?'overdue':diff===0?'due':diff<=soonN?'soon':'paid',diff:diff,dueO:dueO};
+}
+/*LOGIC-END*/
+const SHEET_ID='1d6I8hfk97lWhuvlh9HA3E-IGRSCM-abxafiHYLrSmXM';
+const SHEET_URL='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/edit';
+const SERVER='Google Sheets';
+const TAB='תאים';
+const INPUT={spreadsheetId:SHEET_ID,range:TAB+'!A2:J100'};
+const MODE=(window.claude&&typeof window.claude.use==='function')?'claude':'web';
+const CAB={R:'ימין',L:'שמאל'};
+const KINDL={person:'שוכר',org:'מוסד / שימוש פנימי',verify:'לברר',free:'פנוי'};
+const TYPEL={paid:'שולם בחודש הזה',until:'שולם עד סוף החודש'};
+const NOW=nowHeb();
+let MCP=null,cells={},loaded=false,errState=null,stamp=null,filter='all',q='',soonN=3,editing=null,saving=false,pollOn=false;
+const WebS={key:null};
+try{const s=parseInt(localStorage.getItem('soonN'),10);if([1,2,3,6,12].indexOf(s)>=0)soonN=s;}catch(e){}
+try{WebS.key=localStorage.getItem('dkey');}catch(e){}
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const pad=n=>String(n).padStart(2,'0');
+function mon(n){return n===1?'חודש':n===2?'חודשיים':n+' חודשים';}
+function ymLabel(y,k){return lab(k)+' '+hebNum(y);}
+
+/* sheet rows -> cells */
+const KIND={};Object.keys(KINDL).forEach(k=>{KIND[KINDL[k]]=k;});
+const MKEY={};MONTHS.forEach(m=>{MKEY[m[1]]=m[0];});
+function parseRows(values){
+  const out={};
+  (Array.isArray(values)?values:[]).forEach((r,idx)=>{
+    const cab=r[0]==='ימין'?'R':r[0]==='שמאל'?'L':null;
+    const n=parseInt(r[1],10);
+    if(!cab||!(n>=1&&n<=16))return;
+    const tenant=String(r[3]||'').trim();
+    const kind=KIND[String(r[2]||'').trim()]||(tenant?'person':'free');
+    const y=parseInt(r[6],10);
+    const m=MKEY[String(r[5]||'').trim()]||null;
+    const ok=y>5000&&m;
+    out[cab+pad(n)]={
+      kind:kind,tenant:tenant,note:String(r[4]||'').trim(),
+      payYear:ok?y:null,payMonth:ok?m:null,
+      payType:String(r[7]||'').indexOf('עד')>=0?'until':'paid',
+      period:parseInt(r[8],10)||12,
+      src:String(r[9]||''),row:idx+2
+    };
+  });
+  return out;
+}
+function info(id){
+  const cab=id[0],n=parseInt(id.slice(1),10);
+  const c=cells[id];
+  if(!c)return {id:id,cab:cab,n:n,missing:true,c:{kind:'verify',tenant:'',note:'',payYear:null,payMonth:null,payType:'paid',period:12,src:'',row:null},st:'unknown',diff:null,dueO:null};
+  const s=statusOf(c,NOW.o,soonN);
+  return {id:id,cab:cab,n:n,c:c,st:s.st,diff:s.diff,dueO:s.dueO};
+}
+function sheetHref(i){return i.c.row?SHEET_URL+'#gid=0&range=A'+i.c.row:SHEET_URL;}
+function stText(i){
+  switch(i.st){
+    case 'free':return 'פנוי';
+    case 'verify':return 'לברר';
+    case 'org':return 'מוסד / פנימי';
+    case 'unknown':return 'אין תאריך תשלום';
+    case 'overdue':return 'באיחור '+mon(-i.diff);
+    case 'due':return 'לתשלום החודש';
+    case 'soon':return 'בעוד '+mon(i.diff);
+    case 'paid':return 'שולם';
+  }
+  return '';
+}
+function nextText(i){
+  if(i.dueO==null)return '';
+  const r=fromOrd(i.dueO);return ymLabel(r.y,r.k);
+}
+function lastPay(c){
+  if(c.payYear==null)return '—';
+  const base=ymLabel(c.payYear,c.payMonth);
+  if(c.payType==='until')return 'עד '+base;
+  return base+(c.period!==12?' (ל־'+c.period+' חודשים)':'');
+}
+function where(i){return 'ארון '+CAB[i.cab]+' · תא '+i.n;}
+function nameOf(i){
+  if(i.st==='free')return 'פנוי';
+  if(i.st==='verify')return i.c.tenant||'לברר';
+  return i.c.tenant||'ללא שם';
+}
+function matchFilter(i){
+  if(filter==='all')return true;
+  if(filter==='unknown')return i.st==='unknown'||i.st==='verify';
+  return i.st===filter;
+}
+function matchSearch(i){
+  if(!q)return true;
+  const hay=[i.c.tenant,i.c.note,i.c.src,CAB[i.cab],i.n].join(' ').toLowerCase();
+  return hay.indexOf(q.toLowerCase())>=0;
+}
+const RANK={overdue:0,due:1,soon:2,unknown:3,verify:4,paid:5,org:6,free:7};
+
+function stateHTML(){
+  let t,b,extra='';
+  if(errState==='nomcp'){t='החיבור לגיליון לא זמין';b='הדשבורד קורא את הנתונים מ־Google Sheets, וזה לא אפשרי בתצוגה הזו. אפשר לפתוח אותו מתוך claude.ai.';}
+  else if(errState==='unauthorized'){
+    t='כניסה לדשבורד';b='הדף מוגן בסיסמה.';
+    extra='<form class="pwform" id="pwform"><label for="pw" class="visually">סיסמה</label><input id="pw" type="password" autocomplete="current-password" placeholder="סיסמה" required><button class="btn-grant" type="submit">כניסה</button></form>'+(WebS.bad?'<p class="msg">הסיסמה לא נכונה.</p>':'');
+  }
+  else if(errState==='not_configured'){t='השרת עוד לא מחובר לגיליון';b='צריך להגדיר ב־Vercel את GOOGLE_SERVICE_ACCOUNT_JSON ולשתף את הגיליון עם כתובת חשבון השירות. ההוראות ב־README.';}
+  else if(errState==='not_in_manifest'||errState==='consent_required'||errState==='approval_required'){
+    t='הדף צריך אישור לקרוא את הגיליון';b='לחיצה על הכפתור תבקש אישור, והנתונים יופיעו מיד אחריו.';
+    extra='<p><button class="btn-grant" id="grant">אישור קריאת הגיליון</button></p>';
+  }
+  else if(errState==='server_not_connected'||errState==='selection_required'||errState==='server_not_found'){t='Google Sheets לא מחובר';b='צריך לחבר את Google Sheets ב־claude.ai, בהגדרות, תחת מחברים.';}
+  else if(errState==='needs_reauth'){t='החיבור ל־Google Sheets פג';b='צריך להתחבר מחדש ל־Google Sheets בהגדרות של claude.ai, תחת מחברים.';}
+  else if(errState==='blocked_by_policy'){t='הארגון חוסם את הקריאה מהגיליון';b='מי שמנהל את החשבון יכול לאפשר את זה.';}
+  else if(errState){t='אי אפשר לקרוא את הגיליון';b='ייתכן שאין גישה לקובץ, או שהוא הועבר. נסה לרענן את הדף.';}
+  else if(loaded){t='הגיליון ריק';b='הדשבורד מחפש שורות בלשונית ״תאים״ עם ארון (ימין או שמאל) ומספר תא.';}
+  else {t='טוען את התאים…';b='הנתונים נקראים מהגיליון.';}
+  return '<div class="state"><b>'+t+'</b>'+b+extra+'</div>';
+}
+
+function render(){
+  const infos=[];
+  ['R','L'].forEach(cab=>{for(let n=1;n<=16;n++)infos.push(info(cab+pad(n)));});
+  const have=Object.keys(cells).length>0;
+
+  const cnt={free:0,overdue:0,due:0,soon:0,paid:0,unknown:0};
+  if(have)infos.forEach(i=>{
+    if(i.st==='verify'||i.st==='unknown')cnt.unknown++;
+    else if(cnt[i.st]!==undefined)cnt[i.st]++;
+  });
+  Object.keys(cnt).forEach(k=>{$('n-'+k).textContent=have?cnt[k]:'–';});
+  document.querySelectorAll('.tile').forEach(t=>t.setAttribute('aria-pressed',String(t.dataset.filter===filter)));
+  $('reset').hidden=(filter==='all'&&!q);
+  header();
+
+  if(!have){
+    $('cabs').innerHTML=stateHTML();$('attention').innerHTML='';$('freelist').innerHTML='';$('ledger').innerHTML='';
+    const g=$('grant');if(g)g.addEventListener('click',grant);
+    const f=$('pwform');if(f)f.addEventListener('submit',pwSubmit);
+    return;
+  }
+
+  const att=infos.filter(i=>i.st==='overdue'||i.st==='due'||i.st==='soon').sort((a,b)=>a.diff-b.diff);
+  $('attention').innerHTML=att.length
+    ?'<ul class="list">'+att.map(i=>
+      '<li><button class="row" data-id="'+i.id+'"><span class="who">'+esc(nameOf(i))+'</span>'
+      +'<span class="where">'+where(i)+' · לתשלום '+esc(nextText(i))+'</span>'
+      +'<span class="chip s-'+i.st+'">'+esc(stText(i))+'</span></button></li>').join('')+'</ul>'
+    :'<p class="empty-note">אין תשלומים באיחור או בטווח של '+mon(soonN)+'.</p>';
+
+  const fr=infos.filter(i=>i.st==='free');
+  $('freelist').innerHTML=fr.length
+    ?'<div class="freegrid">'+fr.map(i=>'<button class="freebtn" data-id="'+i.id+'">'+CAB[i.cab]+' '+i.n+(i.c.note?'<small>'+esc(i.c.note)+'</small>':'')+'</button>').join('')+'</div>'
+    :'<p class="empty-note">כל התאים תפוסים.</p>';
+
+  const cabHTML=cab=>{
+    let h='<section class="cab" aria-label="ארון '+CAB[cab]+'"><h2>ארון '+CAB[cab]+'</h2><div class="cab-frame"><div class="cab-grid">';
+    infos.filter(i=>i.cab===cab).forEach(i=>{
+      const dim=!(matchFilter(i)&&matchSearch(i));
+      const nx=nextText(i);
+      h+='<button class="cell s-'+i.st+(dim?' dim':'')+'" data-id="'+i.id+'" aria-label="'+esc(where(i)+', '+nameOf(i)+', '+stText(i))+'">'
+        +'<span class="num">'+i.n+'</span>'
+        +'<span class="nm">'+esc(nameOf(i))+'</span>'
+        +'<span><span class="stx">'+esc(stText(i))+'</span>'+(nx&&(i.st==='paid'||i.st==='soon')?'<br><span class="nx">לתשלום '+esc(nx)+'</span>':'')+'</span>'
+        +'</button>';
+    });
+    return h+'</div></div></section>';
+  };
+  $('cabs').innerHTML='<div class="cabrow">'+cabHTML('R')+cabHTML('L')+'</div>'
+    +'<p class="hint">המספור לפי סדר התאים בטבלאות בקובץ, מהשורה הראשונה לאחרונה ומימין לשמאל. לחיצה על תא פותחת עריכה, והשינוי נשמר בגיליון.</p>';
+
+  const rows=infos.filter(i=>i.st!=='free'&&matchFilter(i)&&matchSearch(i))
+    .sort((a,b)=>(RANK[a.st]-RANK[b.st])||((a.diff||0)-(b.diff||0))||a.id.localeCompare(b.id));
+  $('ledger').innerHTML=rows.length?rows.map(i=>
+    '<tr><td class="t-where">'+CAB[i.cab]+' '+i.n+'</td>'
+    +'<td class="t-who">'+esc(nameOf(i))+(i.c.note?'<small>'+esc(i.c.note)+'</small>':'')+'</td>'
+    +'<td class="t-date">'+esc(lastPay(i.c))+'</td>'
+    +'<td class="t-date">'+esc(nextText(i)||'—')+'</td>'
+    +'<td><span class="chip s-'+i.st+'">'+esc(stText(i))+'</span></td>'
+    +'<td><button class="link" data-id="'+i.id+'">עריכה</button></td></tr>').join('')
+    :'<tr><td colspan="6"><p class="empty-note">אין שורות שמתאימות לסינון.</p></td></tr>';
+}
+
+function header(){
+  const g=new Date().toLocaleDateString('he-IL',{day:'numeric',month:'numeric',year:'numeric',timeZone:'Asia/Jerusalem'});
+  let s='<span>היום <b>'+(NOW.d?hebNum(NOW.d)+' ב':'')+lab(NOW.k)+' '+hebNum(NOW.y)+'</b></span><span>'+g+'</span>';
+  if(stamp){
+    const t=new Date(stamp).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jerusalem'});
+    s+='<span>נתונים מהגיליון, עודכנו ב־'+t+'</span>';
+  }
+  $('dateline').innerHTML=s;
+}
+
+/* data: claude.ai (connector) or web (API route) */
+function grant(){
+  if(!MCP)return;
+  MCP.callTool(SERVER,'get_values',INPUT).then(r=>onEvent({type:'data',result:r})).catch(e=>onEvent({type:'error',error:e}));
+}
+function onEvent(ev){
+  if(ev.type==='data'){
+    const p=ev.result&&ev.result.payload;
+    if(!p||typeof p!=='object'){errState='tool_error';loaded=true;render();return;}
+    cells=parseRows(p.values);loaded=true;errState=null;
+    stamp=(ev.result.cache&&ev.result.cache.storedAt)||Date.now();
+    render();return;
+  }
+  const code=(ev.error&&ev.error.code)||'upstream_error';
+  const transient=code==='server_unavailable'||code==='upstream_error'||code==='tool_error'||code==='rate_limited';
+  if(transient&&Object.keys(cells).length)return; /* keep last good data */
+  cells={};errState=code;loaded=true;render();
+}
+async function webRead(){
+  const r=await fetch('/api/rows',{cache:'no-store',headers:{'x-dashboard-key':WebS.key||''}});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw {code:j.error||'upstream_error'};
+  return j.values||[];
+}
+async function webWrite(row,vals){
+  const r=await fetch('/api/rows',{method:'POST',headers:{'content-type':'application/json','x-dashboard-key':WebS.key||''},body:JSON.stringify({row:row,values:vals})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw {code:j.error||'upstream_error'};
+}
+async function webLoad(){
+  try{const v=await webRead();WebS.bad=false;onEvent({type:'data',result:{payload:{values:v}}});}
+  catch(e){
+    if(e&&e.code==='unauthorized'){try{localStorage.removeItem('dkey');}catch(x){}WebS.key=null;}
+    onEvent({type:'error',error:e});
+  }
+}
+function pwSubmit(e){
+  e.preventDefault();
+  const v=$('pw').value;if(!v)return;
+  WebS.key=v;
+  try{localStorage.setItem('dkey',v);}catch(x){}
+  loaded=false;errState=null;render();
+  webLoad().then(()=>{if(errState==='unauthorized')WebS.bad=true;if(errState==='unauthorized')render();});
+  startPoll();
+}
+function startPoll(){if(pollOn)return;pollOn=true;setInterval(()=>{if(WebS.key)webLoad();},60000);}
+
+/* writing back to the sheet */
+function rowValues(i,d){
+  const hasPay=!!(d.payMonth&&d.payYear);
+  return [CAB[i.cab],i.n,KINDL[d.kind],d.tenant,d.note,
+    hasPay?lab(d.payMonth):'',hasPay?d.payYear:'',
+    hasPay?TYPEL[d.payType]:'',(hasPay&&d.payType==='paid')?d.period:'',i.c.src||''];
+}
+const risky=s=>s!==''&&(/^[=+\-@]/.test(s)||/^[\d.,\/:\-\s]+$/.test(s));
+async function clWrite(row,vals){
+  const chk=await MCP.callTool(SERVER,'get_values',{spreadsheetId:SHEET_ID,range:TAB+'!A'+row+':B'+row},{cache:false});
+  const have=(chk.payload&&chk.payload.values&&chk.payload.values[0])||[];
+  if(String(have[0])!==String(vals[0])||String(have[1])!==String(vals[1]))throw {code:'row_changed'};
+  const out=vals.map(v=>(typeof v==='string'&&risky(v))?"'"+v:v);
+  await MCP.callTool(SERVER,'update_values',{spreadsheetId:SHEET_ID,range:TAB+'!A'+row+':J'+row,values:[out]},{cache:false});
+  try{await MCP.invalidate(SERVER,'get_values');}catch(e){}
+}
+async function saveRow(id,d){
+  const i=info(id);
+  if(!i.c.row)throw {code:'no_row'};
+  const vals=rowValues(i,d);
+  if(MODE==='claude'){if(!MCP)throw {code:'nomcp'};await clWrite(i.c.row,vals);}
+  else await webWrite(i.c.row,vals);
+  cells[id]=Object.assign({},d,{row:i.c.row,src:i.c.src});
+}
+function errMsg(e){
+  const c=e&&e.code;
+  if(c==='row_changed')return 'הגיליון השתנה מאז הטעינה. סגור, חכה רגע ונסה שוב.';
+  if(c==='unauthorized')return 'הסיסמה לא תקפה. צריך להיכנס מחדש.';
+  if(c==='approval_required'||c==='not_in_manifest'||c==='consent_required')return 'צריך לאשר לדף לכתוב לגיליון. נסה שוב ואשר.';
+  if(c==='not_configured')return 'השרת עוד לא מחובר לגיליון.';
+  if(c==='needs_reauth'||c==='server_not_connected')return 'החיבור ל־Google Sheets לא פעיל.';
+  if(c==='no_row')return 'לא נמצאה שורה בגיליון עבור התא הזה.';
+  return 'השמירה נכשלה. אפשר לנסות שוב.';
+}
+
+/* editor */
+function fillMonths(){
+  $('ed-month').innerHTML='<option value="">— ללא —</option>'+MONTHS.map(m=>'<option value="'+m[0]+'">'+m[1]+'</option>').join('');
+}
+function yh(){const y=parseInt($('ed-year').value,10);$('ed-yh').textContent=y>5000?hebNum(y):'';}
+function setBtns(dis){['ed-save','ed-paynow','ed-free'].forEach(id=>{$(id).disabled=dis;});}
+function openEditor(id){
+  const i=info(id);if(i.missing)return;
+  editing=id;
+  $('ed-title').textContent='תא '+i.n+' · ארון '+CAB[i.cab];
+  $('ed-src').textContent=i.c.src?'במקור בקובץ: '+i.c.src:'';
+  $('ed-sheet').href=sheetHref(i);
+  $('ed-kind').value=i.c.kind;
+  $('ed-tenant').value=i.c.tenant;
+  $('ed-note').value=i.c.note;
+  $('ed-month').value=i.c.payMonth||'';
+  $('ed-year').value=i.c.payYear||'';
+  $('ed-type').value=i.c.payType;
+  $('ed-period').value=String([3,6,12,24].indexOf(i.c.period)>=0?i.c.period:12);
+  $('ed-msg').textContent='';setBtns(false);yh();
+  $('ov').hidden=false;
+  setTimeout(()=>{try{$('ed-tenant').focus();}catch(e){}},0);
+}
+function closeEditor(){$('ov').hidden=true;editing=null;}
+function formData(over){
+  const y=parseInt($('ed-year').value,10),m=$('ed-month').value;
+  const ok=y>5000&&m;
+  const d={
+    kind:$('ed-kind').value,tenant:$('ed-tenant').value.trim(),note:$('ed-note').value.trim(),
+    payYear:ok?y:null,payMonth:ok?m:null,
+    payType:$('ed-type').value,period:parseInt($('ed-period').value,10)||12
+  };
+  Object.assign(d,over||{});
+  if(d.kind==='free'){d.tenant='';d.payYear=null;d.payMonth=null;}
+  return d;
+}
+async function saveDoc(d){
+  if(!editing||saving)return;
+  saving=true;$('ed-msg').textContent='שומר…';setBtns(true);
+  try{await saveRow(editing,d);closeEditor();render();}
+  catch(e){
+    $('ed-msg').textContent=errMsg(e);
+    if(e&&e.code==='unauthorized'){closeEditor();cells={};errState='unauthorized';render();}
+  }
+  finally{saving=false;setBtns(false);}
+}
+
+/* events */
+document.addEventListener('click',e=>{
+  const t=e.target.closest('.tile');
+  if(t){filter=(filter===t.dataset.filter)?'all':t.dataset.filter;render();return;}
+  const b=e.target.closest('[data-id]');
+  if(b&&!$('ov').contains(b)){openEditor(b.dataset.id);return;}
+  if(e.target===$('ov'))closeEditor();
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('ov').hidden)closeEditor();});
+$('q').addEventListener('input',e=>{q=e.target.value.trim();render();});
+$('reset').addEventListener('click',()=>{filter='all';q='';$('q').value='';render();});
+$('soonN').value=String(soonN);
+$('soonN').addEventListener('change',e=>{soonN=parseInt(e.target.value,10)||3;try{localStorage.setItem('soonN',String(soonN));}catch(x){}render();});
+$('sheetlink').href=SHEET_URL;
+$('ed-year').addEventListener('input',yh);
+$('ed-cancel').addEventListener('click',closeEditor);
+$('ed').addEventListener('submit',e=>{e.preventDefault();saveDoc(formData());});
+$('ed-paynow').addEventListener('click',()=>{saveDoc(formData({kind:'person',payYear:NOW.y,payMonth:NOW.k,payType:'paid'}));});
+$('ed-free').addEventListener('click',()=>{saveDoc(formData({kind:'free'}));});
+
+fillMonths();
+render();
+(async function(){
+  if(MODE==='web'){
+    if(!WebS.key){errState='unauthorized';loaded=true;render();return;}
+    webLoad();startPoll();return;
+  }
+  try{MCP=await window.claude.use('mcp');}catch(e){MCP=null;}
+  if(!MCP){errState='nomcp';loaded=true;render();return;}
+  setTimeout(()=>{if(!loaded){$('cabs').innerHTML='<div class="state"><b>הנתונים עדיין לא הגיעו</b>הדף ימשיך לנסות לקרוא את הגיליון.</div>';}},10000);
+  MCP.watchTool(SERVER,'get_values',INPUT,onEvent,{refetchInterval:60000});
+})();
+</script>
+
+</body>
+</html>

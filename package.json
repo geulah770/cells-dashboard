@@ -1,0 +1,7 @@
+{
+  "name": "cells-dashboard",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Dashboard for the cell rentals sheet",
+  "engines": { "node": ">=20" }
+}
