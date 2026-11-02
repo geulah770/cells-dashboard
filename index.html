@@ -230,7 +230,6 @@ a.freebtn{text-decoration:none}
   <header class="top">
     <h1>שכירות תאים</h1>
     <div class="dateline" id="dateline"></div>
-    <a class="sheetlink" id="sheetlink" href="#" target="_blank" rel="noopener">פתיחת הגיליון</a>
   </header>
 
   <section class="bar" aria-label="סינון">
@@ -757,7 +756,6 @@ $('q').addEventListener('input',e=>{q=e.target.value.trim();render();});
 $('reset').addEventListener('click',()=>{filter='all';q='';$('q').value='';render();});
 $('soonN').value=String(soonN);
 $('soonN').addEventListener('change',e=>{soonN=parseInt(e.target.value,10)||3;try{localStorage.setItem('soonN',String(soonN));}catch(x){}render();});
-$('sheetlink').href=SHEET_URL;
 $('ed-year').addEventListener('input',yh);
 $('ed-cancel').addEventListener('click',closeEditor);
 $('ed').addEventListener('submit',e=>{e.preventDefault();saveDoc(formData());});
