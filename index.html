@@ -214,6 +214,12 @@ a.freebtn{text-decoration:none}
 .gated .state{max-width:440px;margin:6vh auto 0;text-align:center;padding:32px 20px}
 .gated .state b{font-size:24px;margin-bottom:8px}
 .gated .btn-grant{font-size:17px;padding:12px 24px;margin-top:14px}
+/* gate: no data yet, show only the state card */
+.gated .bar,.gated .aside,.gated .ledger,.gated .hint{display:none}
+.gated .main{grid-template-columns:minmax(0,1fr);grid-template-areas:"cabs"}
+.gated .state{padding:28px 20px;text-align:center}
+.gated .state b{font-size:24px}
+.gated .btn-grant{font-size:17px;padding:12px 22px}
 @media (prefers-reduced-motion: reduce){.cell{transition:none}.cell:hover{transform:none}}
 </style>
 </head>
@@ -522,6 +528,7 @@ function render(){
   $('reset').hidden=(filter==='all'&&!q);
   header();
 
+  document.body.classList.toggle('gated',!have);
   document.body.classList.toggle('gated',!have);
   if(!have){
     $('cabs').innerHTML=stateHTML();$('attention').innerHTML='';$('freelist').innerHTML='';$('ledger').innerHTML='';
