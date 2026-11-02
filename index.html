@@ -391,9 +391,8 @@ const KINDL={person:'שוכר',org:'מוסד / שימוש פנימי',verify:'ל
 const TYPEL={paid:'שולם בחודש הזה',until:'שולם עד סוף החודש'};
 const NOW=nowHeb();
 let MCP=null,cells={},loaded=false,errState=null,stamp=null,filter='all',q='',soonN=3,editing=null,saving=false,pollOn=false;
-const WebS={key:null};
+const WebS={msg:''};
 try{const s=parseInt(localStorage.getItem('soonN'),10);if([1,2,3,6,12].indexOf(s)>=0)soonN=s;}catch(e){}
-try{WebS.key=localStorage.getItem('dkey');}catch(e){}
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -478,10 +477,14 @@ function stateHTML(){
   let t,b,extra='';
   if(errState==='nomcp'){t='החיבור לגיליון לא זמין';b='הדשבורד קורא את הנתונים מ־Google Sheets, וזה לא אפשרי בתצוגה הזו. אפשר לפתוח אותו מתוך claude.ai.';}
   else if(errState==='unauthorized'){
-    t='כניסה לדשבורד';b='הדף מוגן בסיסמה.';
-    extra='<form class="pwform" id="pwform"><label for="pw" class="visually">סיסמה</label><input id="pw" type="password" autocomplete="current-password" placeholder="סיסמה" required><button class="btn-grant" type="submit">כניסה</button></form>'+(WebS.bad?'<p class="msg">הסיסמה לא נכונה.</p>':'');
+    t='כניסה לדשבורד';b='כדי לראות ולערוך את התאים צריך להתחבר עם חשבון Google שיש לו גישה לגיליון.'+(WebS.msg?'<br>'+esc(WebS.msg):'');
+    extra='<p><button class="btn-grant" id="signin">התחברות עם Google</button></p>';
   }
-  else if(errState==='not_configured'){t='השרת עוד לא מחובר לגיליון';b='צריך להגדיר ב־Vercel את GOOGLE_SERVICE_ACCOUNT_JSON ולשתף את הגיליון עם כתובת חשבון השירות. ההוראות ב־README.';}
+  else if(errState==='no_access'){
+    t='אין גישה לגיליון';b='לחשבון הזה אין הרשאה לגיליון. אפשר להתחבר עם חשבון אחר או לבקש מבעל הגיליון להוסיף את החשבון כעורך.';
+    extra='<p><button class="btn-grant" id="switchacct">התחברות עם חשבון אחר</button></p>';
+  }
+  else if(errState==='not_configured'){t='ההתחברות עוד לא מוגדרת';b='חסרים ב־Vercel משתני הסביבה GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET ו־SESSION_SECRET. ההוראות ב־README.';}
   else if(errState==='not_in_manifest'||errState==='consent_required'||errState==='approval_required'){
     t='הדף צריך אישור לקרוא את הגיליון';b='לחיצה על הכפתור תבקש אישור, והנתונים יופיעו מיד אחריו.';
     extra='<p><button class="btn-grant" id="grant">אישור קריאת הגיליון</button></p>';
@@ -513,7 +516,6 @@ function render(){
   if(!have){
     $('cabs').innerHTML=stateHTML();$('attention').innerHTML='';$('freelist').innerHTML='';$('ledger').innerHTML='';
     const g=$('grant');if(g)g.addEventListener('click',grant);
-    const f=$('pwform');if(f)f.addEventListener('submit',pwSubmit);
     return;
   }
 
@@ -565,6 +567,7 @@ function header(){
     const t=new Date(stamp).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jerusalem'});
     s+='<span>נתונים מהגיליון, עודכנו ב־'+t+'</span>';
   }
+  if(MODE==='web'&&stamp)s+='<button class="link" id="signout" type="button">התנתקות</button>';
   $('dateline').innerHTML=s;
 }
 
@@ -586,34 +589,56 @@ function onEvent(ev){
   if(transient&&Object.keys(cells).length)return; /* keep last good data */
   cells={};errState=code;loaded=true;render();
 }
+const SHEETS='https://sheets.googleapis.com/v4/spreadsheets/'+SHEET_ID+'/values/';
+let gTok=null,gExp=0;
+const AUTH_ERR={access_denied:'ההתחברות בוטלה או שהחשבון לא מורשה להתחבר לאפליקציה.',missing_scope:'צריך לאשר את הגישה לגיליונות Google כדי להיכנס.',state:'ההתחברות לא אומתה. נסו שוב.',no_refresh_token:'גוגל לא החזירה אישור התחברות ממושך. נסו שוב.',invalid_client:'הגדרות ההתחברות ב־Vercel לא נכונות.',server:'שגיאת שרת בהתחברות. נסו שוב.'};
+async function gToken(force){
+  if(!force&&gTok&&Date.now()<gExp)return gTok;
+  const r=await fetch('/api/auth/token',{headers:{'X-Requested-With':'dashboard'},cache:'no-store',credentials:'same-origin'});
+  if(r.status===401)throw {code:'unauthorized'};
+  if(r.status===500)throw {code:'not_configured'};
+  if(!r.ok)throw {code:'upstream_error'};
+  const j=await r.json();
+  gTok=j.access_token;gExp=Date.now()+((j.expires_in||3600)-120)*1000;
+  return gTok;
+}
+async function gFetch(path,opt,retried){
+  const t=await gToken(!!retried);
+  const o=Object.assign({},opt||{});
+  o.headers=Object.assign({},o.headers||{},{authorization:'Bearer '+t});
+  o.cache='no-store';
+  const r=await fetch(SHEETS+path,o);
+  if(r.status===401&&!retried){gTok=null;return gFetch(path,opt,true);}
+  if(r.status===401)throw {code:'unauthorized'};
+  if(r.status===403||r.status===404)throw {code:'no_access'};
+  if(!r.ok)throw {code:'upstream_error'};
+  return r.json();
+}
 async function webRead(){
-  const r=await fetch('/api/rows',{cache:'no-store',headers:{'x-dashboard-key':WebS.key||''}});
-  const j=await r.json().catch(()=>({}));
-  if(!r.ok)throw {code:j.error||'upstream_error'};
+  const j=await gFetch(encodeURIComponent(TAB+'!A2:J100'));
   return j.values||[];
 }
 async function webWrite(row,vals){
-  const r=await fetch('/api/rows',{method:'POST',headers:{'content-type':'application/json','x-dashboard-key':WebS.key||''},body:JSON.stringify({row:row,values:vals})});
-  const j=await r.json().catch(()=>({}));
-  if(!r.ok)throw {code:j.error||'upstream_error'};
+  const chk=await gFetch(encodeURIComponent(TAB+'!A'+row+':B'+row));
+  const have=(chk.values&&chk.values[0])||[];
+  if(String(have[0])!==String(vals[0])||String(have[1])!==String(vals[1]))throw {code:'row_changed'};
+  const rng=TAB+'!A'+row+':J'+row;
+  await gFetch(encodeURIComponent(rng)+'?valueInputOption=RAW',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({range:rng,majorDimension:'ROWS',values:[vals]})});
 }
 async function webLoad(){
-  try{const v=await webRead();WebS.bad=false;onEvent({type:'data',result:{payload:{values:v}}});}
-  catch(e){
-    if(e&&e.code==='unauthorized'){try{localStorage.removeItem('dkey');}catch(x){}WebS.key=null;}
-    onEvent({type:'error',error:e});
-  }
+  try{const v=await webRead();onEvent({type:'data',result:{payload:{values:v}}});}
+  catch(e){onEvent({type:'error',error:e});}
 }
-function pwSubmit(e){
-  e.preventDefault();
-  const v=$('pw').value;if(!v)return;
-  WebS.key=v;
-  try{localStorage.setItem('dkey',v);}catch(x){}
-  loaded=false;errState=null;render();
-  webLoad().then(()=>{if(errState==='unauthorized')WebS.bad=true;if(errState==='unauthorized')render();});
-  startPoll();
+async function webLogout(){
+  try{await fetch('/api/auth/logout',{method:'POST',headers:{'X-Requested-With':'dashboard'},credentials:'same-origin'});}catch(e){}
+  gTok=null;gExp=0;cells={};stamp=null;
 }
-function startPoll(){if(pollOn)return;pollOn=true;setInterval(()=>{if(WebS.key)webLoad();},60000);}
+async function signOut(){await webLogout();errState='unauthorized';loaded=true;WebS.msg='';render();}
+async function switchAccount(){await webLogout();location.href='/api/auth/login';}
+function startPoll(){
+  if(pollOn)return;pollOn=true;
+  setInterval(()=>{if(errState!=='unauthorized'&&errState!=='no_access'&&errState!=='not_configured')webLoad();},60000);
+}
 
 /* writing back to the sheet */
 function rowValues(i,d){
@@ -642,9 +667,10 @@ async function saveRow(id,d){
 function errMsg(e){
   const c=e&&e.code;
   if(c==='row_changed')return 'הגיליון השתנה מאז הטעינה. סגור, חכה רגע ונסה שוב.';
-  if(c==='unauthorized')return 'הסיסמה לא תקפה. צריך להיכנס מחדש.';
+  if(c==='unauthorized')return 'החיבור פג. צריך להתחבר מחדש.';
+  if(c==='no_access')return 'אין לך הרשאת עריכה בגיליון.';
   if(c==='approval_required'||c==='not_in_manifest'||c==='consent_required')return 'צריך לאשר לדף לכתוב לגיליון. נסה שוב ואשר.';
-  if(c==='not_configured')return 'השרת עוד לא מחובר לגיליון.';
+  if(c==='not_configured')return 'ההתחברות עוד לא מוגדרת ב־Vercel.';
   if(c==='needs_reauth'||c==='server_not_connected')return 'החיבור ל־Google Sheets לא פעיל.';
   if(c==='no_row')return 'לא נמצאה שורה בגיליון עבור התא הזה.';
   return 'השמירה נכשלה. אפשר לנסות שוב.';
@@ -692,13 +718,17 @@ async function saveDoc(d){
   try{await saveRow(editing,d);closeEditor();render();}
   catch(e){
     $('ed-msg').textContent=errMsg(e);
-    if(e&&e.code==='unauthorized'){closeEditor();cells={};errState='unauthorized';render();}
+    if(e&&e.code==='unauthorized'){closeEditor();cells={};stamp=null;errState='unauthorized';render();}
   }
   finally{saving=false;setBtns(false);}
 }
 
 /* events */
 document.addEventListener('click',e=>{
+  const id=e.target&&e.target.id;
+  if(id==='signin'){location.href='/api/auth/login';return;}
+  if(id==='switchacct'){switchAccount();return;}
+  if(id==='signout'){signOut();return;}
   const t=e.target.closest('.tile');
   if(t){filter=(filter===t.dataset.filter)?'all':t.dataset.filter;render();return;}
   const b=e.target.closest('[data-id]');
@@ -721,7 +751,11 @@ fillMonths();
 render();
 (async function(){
   if(MODE==='web'){
-    if(!WebS.key){errState='unauthorized';loaded=true;render();return;}
+    const m=new URLSearchParams(location.search).get('autherror');
+    if(m){try{history.replaceState(null,'',location.pathname);}catch(x){}WebS.msg=AUTH_ERR[m]||('גוגל החזירה שגיאה: '+m);}
+    let cid='';
+    try{const cr=await fetch('/api/config',{cache:'no-store'});cid=(await cr.json()).clientId||'';}catch(x){}
+    if(!cid){errState='not_configured';loaded=true;render();return;}
     webLoad();startPoll();return;
   }
   try{MCP=await window.claude.use('mcp');}catch(e){MCP=null;}
